@@ -71,6 +71,11 @@ public partial class MainWindow : Window
     private double VirtualScreenWidthHalfScaled;
     private double VirtualScreenHeightHalfScaled;
 
+    private readonly Brush EnabledScreenWindowBrush = Brushes.Green;
+    private readonly Brush DisabledScreenWindowBrush = Brushes.Black;
+    private readonly Brush ErrorScreenWindowBrush = Brushes.Gray;
+    private readonly Brush CinemaScreenWindowBrush = Brushes.AliceBlue;
+
     private void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
         int margin = 1;
@@ -89,9 +94,9 @@ public partial class MainWindow : Window
             r.Width = screen.Bounds.Width / 10 - 2 * margin;
             r.Height = screen.Bounds.Height / 10 - 2 * margin;
 
-            r.InputBindings.Add(new MouseBinding(new MyCommand<Rectangle>(DisableAllOtherScreens, r), new(MouseAction.LeftClick)));
+            r.InputBindings.Add(new MouseBinding(new MyCommand<Rectangle>(ScreenWindowClicked, r), new(MouseAction.LeftClick)));
             r.Tag = screen.DeviceName;
-            r.Fill = Brushes.Green;
+            r.Fill = EnabledScreenWindowBrush;
             r.Stroke = Brushes.Red;
             r.Visibility = Visibility.Visible;
 
@@ -127,24 +132,45 @@ public partial class MainWindow : Window
 
     //private void DisableAllOtherScreens(Shape shape) => shape.Fill = shape.Fill == Brushes.Yellow ? Brushes.Black : Brushes.Yellow;
 
-    private void DisableAllOtherScreens(Rectangle keepRect)
+    private void ScreenWindowClicked(Rectangle rectangle)
+    {
+        if (rectangle.Fill == EnabledScreenWindowBrush)
+        {
+            DisableAllOtherWindows(rectangle);
+            rectangle.Fill = CinemaScreenWindowBrush;
+        }
+        else if (rectangle.Fill == CinemaScreenWindowBrush)
+        {
+            EnableAllOtherWindows(rectangle);
+            rectangle.Fill = EnabledScreenWindowBrush;
+        }
+        else if (rectangle.Fill == DisabledScreenWindowBrush)
+        {
+            if (Windows.FirstOrDefault(w => w.Tag == rectangle) is { } win)
+            {
+                CloseWindow(win);
+            }
+        }
+    }
+
+    private void DisableAllOtherWindows(Rectangle keepRect)
     {
         foreach (var rectangle in Rectangles)
         {
             if (rectangle != keepRect)
             {
-                var deviceName = (string)rectangle.Tag;
-                {
-                    if (Screen.AllScreens.FirstOrDefault(x => x.DeviceName == deviceName) is { } screen)
-                    {
-                        DisableScreen(screen);
-                        rectangle.Fill = Brushes.Black;
-                    }
-                    else
-                    {
-                        rectangle.Fill = Brushes.Gray;
-                    }
-                }
+                DisableScreen(rectangle);
+            }
+        }
+    }
+
+    private void EnableAllOtherWindows(Rectangle rect)
+    {
+        foreach (var rectangle in Rectangles)
+        {
+            if (rect != rectangle)
+            {
+                CloseWindow(rectangle);
             }
         }
     }
@@ -154,10 +180,27 @@ public partial class MainWindow : Window
     const int DM_PELSWIDTH = 0x80000;
     const int DM_PELSHEIGHT = 0x100000;
 
-    private List<Window> Windows = new();
+    private readonly List<Window> Windows = new();
 
+    private void CloseWindow(Rectangle rectangle)
+    {
+        if (Windows.FirstOrDefault(w => w.Tag == rectangle) is { } win)
+        {
+            CloseWindow(win);
+        }
+    }
 
-    private void DisableScreen(Screen screen)
+    private void CloseWindow(Window window)
+    {
+        Windows.Remove(window);
+        if (window.Tag is Rectangle rect)
+        {
+            rect.Fill = EnabledScreenWindowBrush;
+        }
+        window.Close();
+    }
+
+    private void DisableScreen(Screen screen, Rectangle rect)
     {
         var screenWin = new Window();
         Windows.Add(screenWin);
@@ -172,8 +215,26 @@ public partial class MainWindow : Window
         screenWin.ShowInTaskbar = false;
         screenWin.WindowStyle = WindowStyle.None;
         screenWin.ResizeMode = ResizeMode.NoResize;
-        //screenWin.bord
+        screenWin.Tag = rect;
+        screenWin.InputBindings.Add(new MouseBinding(new MyCommand<Window>(CloseWindow, screenWin), new(MouseAction.LeftClick)));
+
         screenWin.Show();
+    }
+
+
+    private void DisableScreen(Rectangle rectangle)
+    {
+        var deviceName = (string)rectangle.Tag;
+
+        if (Screen.AllScreens.FirstOrDefault(x => x.DeviceName == deviceName) is { } screen)
+        {
+            DisableScreen(screen, rectangle);
+            rectangle.Fill = DisabledScreenWindowBrush;
+        }
+        else
+        {
+            rectangle.Fill = ErrorScreenWindowBrush;
+        }
     }
 
     private void DisableScreenByDetaching(Screen screen)

@@ -8,6 +8,170 @@ using System.Threading.Tasks;
 
 namespace Alex.PInvoke
 {
+
+    internal class Dxva2
+    {
+        [DllImport("dxva2.dll")]
+        public static extern bool GetMonitorBrightness(IntPtr hMonitor, ref IntPtr pwdMinimumBrightness, ref IntPtr pwdCurrentBrightness, ref IntPtr pwdMaximumBrightness);
+
+        public static bool GetMonitorBrightness(IntPtr hMonitor, out int brightness)
+        {
+            IntPtr minBrightness = IntPtr.Zero;
+            IntPtr maxBrightness = IntPtr.Zero;
+            IntPtr curBrightness = IntPtr.Zero;
+
+            if (GetMonitorBrightness(hMonitor, ref minBrightness, ref curBrightness, ref maxBrightness))
+            {
+                brightness = curBrightness.ToInt32();
+                return true;
+            }
+            else
+            {
+                brightness = 0;
+                return false;
+            }
+
+        }
+
+        [DllImport("dxva2.dll")]
+        public static extern bool SetMonitorBrightness(IntPtr hMonitor, int dwNewBrightness);
+
+        [DllImport("dxva2.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool GetPhysicalMonitorsFromHMONITOR(IntPtr hMonitor, uint dwPhysicalMonitorArraySize, [Out] PHYSICAL_MONITOR[] pPhysicalMonitorArray);
+
+        [DllImport("dxva2.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool GetNumberOfPhysicalMonitorsFromHMONITOR(IntPtr hMonitor, ref uint pdwNumberOfPhysicalMonitors);
+
+        public static int GetPhysicalMonitorCount(IntPtr hMonitor)
+        {
+            uint count = 0;
+            GetNumberOfPhysicalMonitorsFromHMONITOR(hMonitor, ref count);
+
+            return (int)count;
+        }
+
+
+        public static void TestMonitors()
+        {
+            List<(int Handle, string Descr)> monitors = new();
+
+            User32.EnumDisplayMonitors(IntPtr.Zero, IntPtr.Zero, new(EnumMonitorsDlg), IntPtr.Zero);
+
+            bool EnumMonitorsDlg(IntPtr hMonitor, IntPtr hdcMonitor, ref User32.Rect lprcMonitor, IntPtr dwData)
+            {
+                monitors.Add((hMonitor.ToInt32(), $"{hMonitor}, {hdcMonitor}, {lprcMonitor},{dwData}"));
+
+
+                uint monCount = 0;
+                // Get the number of physical monitors.
+                if (GetNumberOfPhysicalMonitorsFromHMONITOR(hMonitor, ref monCount))
+                {
+                    var mons = new PHYSICAL_MONITOR[monCount];
+
+                    if (GetPhysicalMonitorsFromHMONITOR(hMonitor, (uint)mons.Length, mons))
+                    {
+                        foreach (var physMon in mons)
+                        {
+                            IntPtr brightnessMin = IntPtr.Zero;
+                            IntPtr brightnessCur = IntPtr.Zero;
+                            IntPtr brightnessMax = IntPtr.Zero;
+
+                            var bri = GetMonitorBrightness(physMon.hPhysicalMonitor, ref brightnessMin, ref brightnessCur, ref brightnessMax);
+                        }
+                    }
+                }
+
+                return true;
+            }
+        }
+
+        internal static List<MonitorInfo> GetMonitorsInfo()
+        {
+            List<MonitorInfo> result = new();
+
+            User32.EnumDisplayMonitors(IntPtr.Zero, IntPtr.Zero, new(EnumMonitorsDlg), IntPtr.Zero);
+
+            bool EnumMonitorsDlg(IntPtr hMonitor, IntPtr hdcMonitor, ref User32.Rect lprcMonitor, IntPtr dwData)
+            {
+                MonitorInfo mi;
+                result.Add(mi = new()
+                {
+                    Handle = hMonitor,
+                    Rect = lprcMonitor,
+                });
+
+                uint monCount = 0;
+                // Get the number of physical monitors.
+                if (GetNumberOfPhysicalMonitorsFromHMONITOR(hMonitor, ref monCount))
+                {
+                    var mons = new PHYSICAL_MONITOR[monCount];
+
+                    if (GetPhysicalMonitorsFromHMONITOR(hMonitor, (uint)mons.Length, mons))
+                    {
+
+                        PhysicalMonitorInfo pmi;
+                        foreach (var physMon in mons)
+                        {
+                            mi.PhysicalMonitors.Add(pmi = new()
+                            {
+                                Handle = physMon.hPhysicalMonitor,
+                                Description = physMon.szPhysicalMonitorDescription,
+                            });
+
+                            IntPtr brightnessMin = IntPtr.Zero;
+                            IntPtr brightnessCur = IntPtr.Zero;
+                            IntPtr brightnessMax = IntPtr.Zero;
+
+                            if (GetMonitorBrightness(physMon.hPhysicalMonitor, ref brightnessMin, ref brightnessCur, ref brightnessMax))
+                            {
+
+                                pmi.MinimalBrightness = brightnessMin.ToInt32();
+                                pmi.MaximalBrightness = brightnessMax.ToInt32();
+                                pmi.InitialBrightness = brightnessCur.ToInt32();
+                            }
+                        }
+                    }
+                }
+
+                return true;
+            }
+
+            return result;
+        }
+
+        public class MonitorInfo
+        {
+            public IntPtr Handle { get; set; }
+            public User32.Rect Rect { get; internal set; }
+            public List<PhysicalMonitorInfo> PhysicalMonitors { get; } = new();
+        }
+
+        public class PhysicalMonitorInfo
+        {
+            public IntPtr Handle { get; set; }
+            public string? Description { get; set; }
+
+            public int MinimalBrightness { get; internal set; }
+            public int MaximalBrightness { get; internal set; }
+            public int InitialBrightness { get; internal set; }
+
+            internal void SetBrightness(int v) => SetMonitorBrightness(Handle, v);
+
+            internal int GetBrightness() => GetMonitorBrightness(Handle, out var brightness) ? brightness : -1;
+        }
+    }
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    struct PHYSICAL_MONITOR
+    {
+        public IntPtr hPhysicalMonitor;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)]
+        public string szPhysicalMonitorDescription;
+    }
+
+
     internal class User32
     {
         //ChangeDisplaySettingsEX
@@ -16,6 +180,21 @@ namespace Alex.PInvoke
 
         [DllImport("user32.dll")]
         public static extern bool EnumDisplaySettings(string lpszDeviceName, ENUM_IMODENUM iModeNum, ref DEVMODE__C_Position_Orientation_FixedOutput_124 lpDevMode);
+
+        [DllImport("user32.dll")]
+        public static extern bool EnumDisplayMonitors(IntPtr hdc, IntPtr lprcClip, EnumMonitorsDelegate lpfnEnum, IntPtr dwData);
+
+        [StructLayout(LayoutKind.Sequential)]
+        public struct Rect
+        {
+            public int left;
+            public int top;
+            public int right;
+            public int bottom;
+        }
+
+        public delegate bool EnumMonitorsDelegate(IntPtr hMonitor, IntPtr hdcMonitor, ref Rect lprcMonitor, IntPtr dwData);
+
     }
 
     public enum ENUM_IMODENUM : int
@@ -67,10 +246,10 @@ namespace Alex.PInvoke
         public short dmBitsPerPel;
         public int dmPelsWidth;
         public int dmPelsHeight;
-        
+
         public int dmDisplayFlags__OR__dmNup;
-        
-        public int dmDisplayFrequency; 
+
+        public int dmDisplayFrequency;
         //public int dmICMMethod;
         //public int dmICMIntent;
         //public int dmMediaType;

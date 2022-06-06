@@ -16,6 +16,7 @@ using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
 using WpfScreenHelper;
+using static Alex.PInvoke.Dxva2;
 
 namespace CinemaMode;
 
@@ -113,22 +114,90 @@ public partial class MainWindow : Window
         ApplyCurrentSize();
         Canvas.Children.Add(WindowRectange);
 
+        MonitorInfos = Dxva2.GetMonitorsInfo();
+
         foreach (var screen in Screen.AllScreens)
         {
-            TextBlock textBlock = new();
-            textBlock.Text = (++i).ToString();// screen.DeviceName.Split("DISPLAY")[1];
-            textBlock.Width = 30;
-            textBlock.Height = 15;
-            textBlock.TextAlignment = TextAlignment.Center;
-            textBlock.Visibility = Visibility.Visible;
-            textBlock.FontWeight = FontWeights.UltraBold;
+            var monitorInfo = MonitorInfos.FirstOrDefault(mi => mi.Handle.ToInt32() == screen.GetHashCode());
+            StackPanel sp = new() 
+            {
+                Orientation = Orientation.Vertical,
+                Width = 50,
+                Height = 30,
+            };
+            StackPanel texts = new()
+            {
+                Orientation = Orientation.Horizontal,
+                Width = 50,
+                Height = 15,
+            };
+            sp.Children.Add(texts);
 
-            Canvas.Children.Add(textBlock);
-            Canvas.SetLeft(textBlock, screen.Bounds.Left / 10 + VirtualScreenWidthHalfScaled + screen.Bounds.Width / 20 - textBlock.Width / 2);
-            Canvas.SetTop(textBlock, screen.Bounds.Top / 10 + VirtualScreenHeightHalfScaled + screen.Bounds.Height / 20 - textBlock.Height / 2);
+            TextBlock textBlock = new()
+            {
+                Text = (++i).ToString(),// screen.DeviceName.Split("DISPLAY")[1];
+                Width = 15,
+                Height = 15,
+                TextAlignment = TextAlignment.Left,
+                Visibility = Visibility.Visible,
+                FontWeight = FontWeights.UltraBold
+            };
+            texts.Children.Add(textBlock);
+
+            if (monitorInfo.PhysicalMonitors is [var physicalMonitorInfo])
+            {
+                TextBlock brightnessTB = new()
+                {
+                    Width = 35,
+                    Height = 15,
+                    TextAlignment = TextAlignment.Right,
+                    Visibility = Visibility.Visible,
+                    Text = $"B {physicalMonitorInfo.GetBrightness()}",
+                    //FontWeight = FontWeights.UltraBold
+                };
+                texts.Children.Add(brightnessTB);
+
+                Slider sli = new()
+                {
+                    Minimum = physicalMonitorInfo.MinimalBrightness,
+                    Maximum = physicalMonitorInfo.MaximalBrightness,
+                    Value = physicalMonitorInfo.InitialBrightness,
+                    Tag = physicalMonitorInfo,
+                };
+                sli.ValueChanged += Sli_ValueChanged;
+                sli.MouseRightButtonUp += Sli_MouseRightButtonUp;
+
+
+                sp.Children.Add(sli);
+
+                void Sli_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+                {
+                    if (sender is Slider slider && slider.Tag is PhysicalMonitorInfo pmi)
+                    {
+                        pmi.SetBrightness((int)slider.Value);
+                        brightnessTB.Text = $"B {(int)slider.Value}";
+                    }
+                }
+
+                void Sli_MouseRightButtonUp(object sender, MouseButtonEventArgs e)
+                {
+                    if (sender is Slider slider && slider.Tag is PhysicalMonitorInfo pmi)
+                    {
+                        slider.Value = pmi.InitialBrightness;
+                        //pmi.SetBrightness(pmi.InitialBrightness);
+                        //brightnessTB.Text = $"B {pmi.InitialBrightness}";
+                    }
+                }
+            }
+            
+            Canvas.Children.Add(sp);
+            Canvas.SetLeft(sp, screen.Bounds.Left / 10 + VirtualScreenWidthHalfScaled + screen.Bounds.Width / 20 - sp.Width / 2);
+            Canvas.SetTop(sp, screen.Bounds.Top / 10 + VirtualScreenHeightHalfScaled + screen.Bounds.Height / 20 - sp.Height / 2);            
         }
 
     }
+
+    private List<Dxva2.MonitorInfo> MonitorInfos;
 
     //private void DisableAllOtherScreens(Shape shape) => shape.Fill = shape.Fill == Brushes.Yellow ? Brushes.Black : Brushes.Yellow;
 
@@ -282,11 +351,7 @@ public partial class MainWindow : Window
 
         DEVMODE__C_Position_Orientation_FixedOutput_124 devModeZero = new();
 
-        var result2 = User32.ChangeDisplaySettingsEx(null, ref devModeZero, IntPtr.Zero, 0, IntPtr.Zero);
-
-
-        ////ChangeDisplaySettingsEX
-        ////PInvoke.User32.changedis
+        var result2 = User32.ChangeDisplaySettingsEx(null!, ref devModeZero, IntPtr.Zero, 0, IntPtr.Zero);
     }
 
     private class MyCommand<T> : ICommand
@@ -300,9 +365,6 @@ public partial class MainWindow : Window
 
         public bool CanExecute(object? parameter) => true;
 
-        public void Execute(object? parameter)
-        {
-            Action(Parameter);
-        }
+        public void Execute(object? parameter) => Action(Parameter);
     }
 }

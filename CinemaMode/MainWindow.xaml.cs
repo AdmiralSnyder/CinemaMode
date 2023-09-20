@@ -1,20 +1,14 @@
-﻿using Alex.PInvoke;
-using PInvoke;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
-using System.Text;
-using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Navigation;
 using System.Windows.Shapes;
+using Alex.PInvoke;
+using PInvoke;
 using WpfScreenHelper;
 using static Alex.PInvoke.Dxva2;
 
@@ -85,6 +79,16 @@ public partial class MainWindow : Window
 
         int i = 0;
 
+        if (Screen.AllScreens.Count() == 1)
+        {
+            MessageBox.Show("""
+            You only have one screen, apparently. 
+            Sadly, there's not much we can do for you. 
+            You can try using the slider to manipulate the 
+            screen's brightness - but that's not guaranteed to work.
+            """, "One screen only.");
+        }
+
         foreach (var screen in Screen.AllScreens)
         {
             Rectangle r = new();
@@ -119,7 +123,7 @@ public partial class MainWindow : Window
         foreach (var screen in Screen.AllScreens)
         {
             var monitorInfo = MonitorInfos.FirstOrDefault(mi => mi.Handle.ToInt32() == screen.GetHashCode());
-            StackPanel sp = new() 
+            StackPanel sp = new()
             {
                 Orientation = Orientation.Vertical,
                 Width = 50,
@@ -189,10 +193,10 @@ public partial class MainWindow : Window
                     }
                 }
             }
-            
+
             Canvas.Children.Add(sp);
             Canvas.SetLeft(sp, screen.Bounds.Left / 10 + VirtualScreenWidthHalfScaled + screen.Bounds.Width / 20 - sp.Width / 2);
-            Canvas.SetTop(sp, screen.Bounds.Top / 10 + VirtualScreenHeightHalfScaled + screen.Bounds.Height / 20 - sp.Height / 2);            
+            Canvas.SetTop(sp, screen.Bounds.Top / 10 + VirtualScreenHeightHalfScaled + screen.Bounds.Height / 20 - sp.Height / 2);
         }
 
     }

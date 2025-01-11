@@ -12,3 +12,8 @@ Can also adjust individual screen's brightness.
 
 
 [Store link](https://apps.microsoft.com/detail/9nj6nx8dzm7z?hl=en-us&gl=DE)
+
+## Install using winget:
+```cmd
+winget install 9nj6nx8dzm7z
+```
